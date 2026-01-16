@@ -118,17 +118,20 @@ document.getElementById("saveBtn").onclick = async () => {
 
 async function del(code){
   if(!confirm("Obrisati?")) return;
+
   await fetch(SCRIPT_URL, {
     method: "POST",
     mode: "no-cors",
     body: new URLSearchParams({
       action: "delete",
-      dobavljac: supplierSelect.value,
+      dobavljac: supplierSelect.value, // 👈 OVO JE FALILO
       sifra: code
     })
   });
+
   await loadData();
 }
+
 
 loadData();
 </script>
