@@ -357,7 +357,102 @@
 
   <script>
     // Svi scriptovi za funkcionalnosti
-    window.addEventListener('load', () => {
+    
+    function prikaziXkolone(prikazi) {
+      document.querySelectorAll('table').forEach(table => {
+        const header = table.querySelector('thead tr');
+        const tbody = table.querySelector('tbody');
+        if (!header || !tbody) return;
+
+        if (prikazi) {
+          if (!header.querySelector('.x-header')) {
+            const th = document.createElement('th');
+            th.textContent = ' ';
+            th.classList.add('x-header');
+            header.appendChild(th);
+          }
+          tbody.querySelectorAll('tr').forEach(row => dodajXdugme(row));
+        } else {
+          const xHeader = header.querySelector('.x-header');
+          if (xHeader) xHeader.remove();
+          tbody.querySelectorAll('.x-cell').forEach(cell => cell.remove());
+        }
+      });
+    }
+
+    function dodajXdugme(row) {
+      if (row.querySelector('.x-cell')) return;
+      const cell = document.createElement('td');
+      cell.innerHTML = '<span style="color:#fdff55; font-size:1.6rem; cursor:pointer;">(X)</span>';
+      cell.classList.add('x-cell');
+      cell.style.textAlign = 'center';
+      cell.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!editMode) return;
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 2) return;
+        const proizvod = cells[0].textContent.trim();
+        const sifra = cells[1].textContent.trim();
+        const supplier = document.getElementById('nameSelector').value;
+
+        if (!supplier) return alert('Odaberi dobavljača.');
+        if (!confirm(`Obrisati proizvod "${proizvod}" (Šifra: ${sifra})?`)) return;
+
+        try {
+          await postToScript({ action: 'delete', dobavljac: supplier, sifra });
+          await loadFromSheet(); // refresh
+        } catch (err) {
+          console.error(err);
+          alert('Greška pri brisanju. Provjeri Apps Script URL i dozvole.');
+        }
+      });
+      row.appendChild(cell);
+    }
+
+    function bindRowClicks() {
+      document.querySelectorAll('table tbody tr').forEach(row => {
+        row.addEventListener('click', () => {
+          if (!editMode) return;
+          const supplier = document.getElementById('nameSelector').value;
+          const cells = row.querySelectorAll('td');
+          if (!supplier || cells.length < 2) return;
+          const proizvod = cells[0].textContent.trim();
+          const sifra = cells[1].textContent.trim();
+
+          // ignore placeholder "Nema proizvoda"
+          if (proizvod === 'Nema proizvoda') return;
+
+          document.getElementById('proizvodInput').value = proizvod;
+          document.getElementById('sifraInput').value = sifra;
+          editRowKey = { supplier, sifra };
+        });
+      });
+    }
+
+    async function postToScript(payload) {
+      if (!SCRIPT_URL || SCRIPT_URL.includes('https://script.google.com/macros/s/AKfycbw4EiRe0-J31SuZUb8dYqfQx1QRA7SqhbPk6HbjmpNTWdHq-jxdkgRkPOnvAvxWEkzc/exec')) {
+        throw new Error('SCRIPT_URL nije postavljen.');
+      }
+      // Form-encoded radi pouzdano u Apps Scriptu
+      const body = new URLSearchParams();
+      Object.keys(payload).forEach(k => body.append(k, payload[k]));
+
+      const res = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body
+      });
+
+      const text = await res.text();
+      // Apps Script cesto vrati plain text / JSON string
+      try {
+        return JSON.parse(text);
+      } catch {
+        return text;
+      }
+    }
+
+window.addEventListener('load', () => {
       const editBtn = document.getElementById('editToggle');
       const form = document.getElementById('editForm');
       const saveBtn = document.getElementById('saveBtn');
@@ -541,7 +636,12 @@
     const SHEET_EDIT_LINK = "https://docs.google.com/spreadsheets/d/11ulT0Q4W7w-LUSfo8gqpxOJE_ez9YhW7X6lGrEmKhuM/edit?usp=sharing";
     const SUPPLIER_ORDER = ["MEPAS", "TULUMOVIĆ", "MADI", "SARA", "LEDO", "VENERA", "EON", "VIOLETA", "AKOVA IMPEX", "DŽAJIĆ COMMERCE", "AG FRIGO", "DUKAT", "MILANKOVIĆ", "KUČ", "PAĐENI", "MEGGLE", "MLIJEKOPRODUKT", "OMEGA", "TRIVAS", "PPK", "LUKAS TP NAKIĆ", "VIMES", "MAKEA / TOPOLSKA", "EUROCOMPANY", "MIK COMPANY", "BAKALAR COMMERCE", "MB IMPEX", "KLEKOVAČA", "KRAJINA KLAS", "DON TRADE", "YIMOR", "NTB TRADE"];
 
-    function escapeHtml(str) {
+    
+    // Apps Script Web App URL (zalijepi svoj URL ovdje nakon deploy-a)
+    const SCRIPT_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+    let editMode = false;
+    let editRowKey = null; // {supplier, sifra}
+function escapeHtml(str) {
       return String(str)
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
@@ -642,6 +742,9 @@
 
       // Opcija B: nista dok se ne izabere
       showList();
+      bindRowClicks();
+      prikaziXkolone(editMode);
+
     }
 
     window.addEventListener('load', () => {
@@ -650,9 +753,13 @@
       if (form) form.style.display = 'none';
 
       if (editBtn) {
-        editBtn.textContent = 'Uredi u Google Sheets';
-        editBtn.addEventListener('click', () => window.open(SHEET_EDIT_LINK, '_blank'));
-      }
+        editBtn.textContent = 'Uredi';
+        editBtn.addEventListener('click', () => {
+          editMode = !editMode;
+          if (form) form.style.display = editMode ? 'block' : 'none';
+          prikaziXkolone(editMode);
+        });
+}
 
       loadFromSheet().catch(err => {
         console.error(err);
