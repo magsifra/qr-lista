@@ -10,7 +10,7 @@
 body{
   background:#000;
   color:#b6b44a;
-  font-family:Arial;
+  font-family:Arial, sans-serif;
   margin:0;
   padding:20px;
   text-align:center;
@@ -71,15 +71,15 @@ button{cursor:pointer}
 </table>
 
 <script>
-/* ================== CONFIG ================== */
+/* ========== CONFIG ========== */
 const SCRIPT_URL =
 "https://script.google.com/macros/s/AKfycbzlbvm4fou_e_RH_S0pi4K6XFrCh5lf3CbaXXJWo5o04S_XdeYb-IQZp-mmQTtMFGCd/exec";
 
-/* ================== STATE ================== */
+/* ========== STATE ========== */
 let data = [];
 let editMode = false;
 
-/* ================== LOAD ================== */
+/* ========== LOAD DATA ========== */
 async function loadData(){
   const res = await fetch(SCRIPT_URL);
   data = await res.json();
@@ -88,17 +88,17 @@ async function loadData(){
 }
 
 function populateSuppliers(){
-  const sel = supplierSelect;
+  const sel = document.getElementById("supplierSelect");
   sel.innerHTML = '<option value="">-- Odaberite --</option>';
-  [...new Set(data.map(d=>d.dobavljac))].forEach(d=>{
-    const o=document.createElement("option");
-    o.value=o.textContent=d;
+  [...new Set(data.map(d => d.dobavljac))].forEach(d => {
+    const o = document.createElement("option");
+    o.value = o.textContent = d;
     sel.appendChild(o);
   });
 }
 
-/* ================== RENDER ================== */
-supplierSelect.onchange = renderTable;
+/* ========== RENDER TABLE ========== */
+document.getElementById("supplierSelect").onchange = renderTable;
 
 function renderTable(){
   const sup = supplierSelect.value;
@@ -111,24 +111,22 @@ function renderTable(){
   }
   table.classList.remove("hidden");
 
-  data.filter(d=>d.dobavljac===sup).forEach(d=>{
-    const tr=document.createElement("tr");
+  data.filter(d => d.dobavljac === sup).forEach(d => {
+    const tr = document.createElement("tr");
 
     tr.innerHTML = `
       <td>${d.proizvod}</td>
       <td>${d.sifra}</td>
       <td>
-        <button onclick="printQR('${d.proizvod}','${d.sifra}')">
-          QR
-        </button>
+        <button onclick="printQR('${d.proizvod}','${d.sifra}')">QR</button>
       </td>
     `;
 
     if(editMode){
-      const td=document.createElement("td");
-      td.textContent="X";
-      td.style.color="red";
-      td.onclick=()=>del(d.sifra);
+      const td = document.createElement("td");
+      td.textContent = "X";
+      td.style.color = "red";
+      td.onclick = () => del(d.sifra);
       tr.appendChild(td);
     }
 
@@ -136,57 +134,60 @@ function renderTable(){
   });
 }
 
-/* ================== EDIT MODE ================== */
-editBtn.onclick = ()=>{
+/* ========== EDIT MODE ========== */
+document.getElementById("editBtn").onclick = () => {
   editMode = !editMode;
-  editForm.classList.toggle("hidden",!editMode);
+  editForm.classList.toggle("hidden", !editMode);
   document.querySelectorAll(".editCol")
-    .forEach(e=>e.classList.toggle("hidden",!editMode));
+    .forEach(e => e.classList.toggle("hidden", !editMode));
   renderTable();
 };
 
-/* ================== SAVE ================== */
-saveBtn.onclick = async ()=>{
-  const sup=supplierSelect.value;
-  const p=productInput.value.trim();
-  const c=codeInput.value.trim();
-  if(!sup||!p||!c) return alert("Popuni sva polja");
+/* ========== SAVE ========== */
+document.getElementById("saveBtn").onclick = async () => {
+  const sup = supplierSelect.value;
+  const p = productInput.value.trim();
+  const c = codeInput.value.trim();
+  if(!sup || !p || !c){
+    alert("Popuni sva polja");
+    return;
+  }
 
-  await fetch(SCRIPT_URL,{
-    method:"POST",
-    mode:"no-cors",
-    body:new URLSearchParams({
-      action:"upsert",
-      dobavljac:sup,
-      proizvod:p,
-      sifra:c
+  await fetch(SCRIPT_URL, {
+    method: "POST",
+    mode: "no-cors",
+    body: new URLSearchParams({
+      action: "upsert",
+      dobavljac: sup,
+      proizvod: p,
+      sifra: c
     })
   });
 
-  productInput.value="";
-  codeInput.value="";
+  productInput.value = "";
+  codeInput.value = "";
   await loadData();
 };
 
-/* ================== DELETE (FIXED) ================== */
+/* ========== DELETE (FIXED) ========== */
 async function del(code){
   if(!confirm("Obrisati proizvod?")) return;
 
-  await fetch(SCRIPT_URL,{
-    method:"POST",
-    mode:"no-cors",
-    body:new URLSearchParams({
-      action:"delete",
-      dobavljac:supplierSelect.value,   // ← KLJUČNO
-      sifra:code
+  await fetch(SCRIPT_URL, {
+    method: "POST",
+    mode: "no-cors",
+    body: new URLSearchParams({
+      action: "delete",
+      dobavljac: supplierSelect.value,
+      sifra: code
     })
   });
 
   await loadData();
 }
 
-/* ================== QR PRINT ================== */
-function printQR(proizvod,sifra){
+/* ========== QR PRINT ========== */
+function printQR(proizvod, sifra){
   const w = window.open("", "_blank");
   w.document.write(`
     <html>
@@ -209,7 +210,7 @@ function printQR(proizvod,sifra){
   w.document.close();
 }
 
-/* ================== INIT ================== */
+/* ========== INIT ========== */
 loadData();
 </script>
 
