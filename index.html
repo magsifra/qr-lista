@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<title>Dobavljači – QR</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+body{background:#000;color:#b6b44a;font-family:Arial;margin:0;padding:20px;text-align:center}
+h1{font-size:2.5rem}
+select,button,input{font-size:1.2rem;padding:10px;margin:10px;border-radius:8px;border:2px solid #b6b44a;background:#000;color:#b6b44a}
+table{width:100%;margin-top:20px;border-collapse:collapse}
+th,td{border:2px solid #b6b44a;padding:10px;font-size:1.2rem}
+.hidden{display:none}
+</style>
+</head>
+<body>
+
+<h1>Dobavljač</h1>
+<select id="supplierSelect">
+<option value="">-- Odaberite --</option>
+</select>
+
+<br>
+<button id="editBtn">Uredi</button>
+
+<div id="editForm" class="hidden">
+<br>
+<input id="productInput" placeholder="Proizvod">
+<input id="codeInput" placeholder="Šifra">
+<br>
+<button id="saveBtn">Spremi</button>
+</div>
+
+<table id="table" class="hidden">
+<thead>
+<tr>
+<th>Proizvod</th>
+<th>Šifra</th>
+<th class="editCol hidden">X</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzlbvm4fou_e_RH_S0pi4K6XFrCh5lf3CbaXXJWo5o04S_XdeYb-IQZp-mmQTtMFGCd/exec";
+
+let data = [];
+let editMode = false;
+
+async function loadData(){
+  const res = await fetch(SCRIPT_URL);
+  data = await res.json();
+  populateSuppliers();
+}
+
+function populateSuppliers(){
+  const sel = document.getElementById("supplierSelect");
+  sel.innerHTML = '<option value="">-- Odaberite --</option>';
+  [...new Set(data.map(d => d.dobavljac))].forEach(d => {
+    const o = document.createElement("option");
+    o.value = o.textContent = d;
+    sel.appendChild(o);
+  });
+}
+
+document.getElementById("supplierSelect").addEventListener("change", renderTable);
+
+function renderTable(){
+  const sup = supplierSelect.value;
+  const tbody = document.querySelector("#table tbody");
+  tbody.innerHTML = "";
+  if(!sup){ table.classList.add("hidden"); return; }
+  table.classList.remove("hidden");
+
+  data.filter(d => d.dobavljac === sup).forEach(d => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${d.proizvod}</td><td>${d.sifra}</td>`;
+    if(editMode){
+      const td = document.createElement("td");
+      td.textContent = "X";
+      td.style.cursor = "pointer";
+      td.onclick = () => del(d.sifra);
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById("editBtn").onclick = () => {
+  editMode = !editMode;
+  editForm.classList.toggle("hidden", !editMode);
+  renderTable();
+};
+
+document.getElementById("saveBtn").onclick = async () => {
+  const sup = supplierSelect.value;
+  const p = productInput.value.trim();
+  const c = codeInput.value.trim();
+  if(!sup || !p || !c) return alert("Popuni sva polja");
+
+  await fetch(SCRIPT_URL, {
+    method: "POST",
+    mode: "no-cors",
+    body: new URLSearchParams({
+      action: "upsert",
+      dobavljac: sup,
+      proizvod: p,
+      sifra: c
+    })
+  });
+
+  productInput.value = "";
+  codeInput.value = "";
+  await loadData();
+};
+
+async function del(code){
+  if(!confirm("Obrisati?")) return;
+  await fetch(SCRIPT_URL, {
+    method: "POST",
+    mode: "no-cors",
+    body: new URLSearchParams({
+      action: "delete",
+      dobavljac: supplierSelect.value,
+      sifra: code
+    })
+  });
+  await loadData();
+}
+
+loadData();
+</script>
+
+</body>
+</html>
