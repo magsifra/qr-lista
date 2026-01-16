@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lista Šifri Proizvoda (QR Lista)</title>
+  
+  <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 2rem;
+      background-color: #000000;
+      color: #fdff55;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+
+    /* Manji font za labelu */
+    label {
+      font-size: 2.5rem; 
+      font-weight: bold;
+    }
+
+    /* Ključna izmena: Manji font i padding za padajući meni */
+    select {
+      font-size: 1.5rem; 
+      margin-top: 1rem;
+      margin-bottom: 2rem; 
+      padding: 0.5rem 1rem; 
+      background-color: #000000;
+      color: #fdff55;
+      border: 2px solid #fdff55;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 800px;
+    }
+
+    table {
+      width: 95%;
+      margin: 2rem auto;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th, td {
+      border: 2px solid #fdff55;
+      padding: 1.5rem;
+      font-size: 2.2rem;
+      word-wrap: break-word;
+    }
+
+    th {
+      background-color: #222;
+      color: #fdff55;
+    }
+
+    .product-section {
+      display: none;
+    }
+
+    /* Grupa dugmadi */
+    .button-group {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-wrap: wrap; 
+        margin-top: 3rem;
+    }
+    
+    .button-group button {
+        margin: 0 15px 10px 15px; 
+        font-size: 1.2rem; 
+        padding: 0.5rem 1rem; 
+        background:#fdff55; 
+        color:black; 
+        border:none; 
+        border-radius:8px; 
+        cursor:pointer; 
+    }
+    
+    #printListBtn {
+        display: none;
+    }
+
+    @media (max-width: 600px) {
+        body {
+            padding: 1rem;
+        }
+        label {
+            font-size: 2rem;
+        }
+        select {
+            font-size: 1.2rem;
+            padding: 0.5rem;
+        }
+        th, td {
+            font-size: 1.6rem;
+            padding: 1rem;
+        }
+        .button-group {
+            flex-direction: column;
+        }
+        .button-group button {
+            margin: 10px 0;
+            width: 80%;
+        }
+    }
+    
+    /* ============================================== */
+    /* STILOVI ZA ŠTAMPANJE (print CSS) - 3 PO REDU */
+    /* ============================================== */
+    @media print {
+        /* Sakrij sve što nije lista (meni, dugmad za izmenu, formu) */
+        body > *:not(#printContent) {
+            display: none !important;
+        }
+        
+        /* Prikaz liste za štampanje */
+        #printContent {
+            display: block !important;
+            padding: 0;
+            max-width: none;
+        }
+        
+        body {
+            background-color: white !important;
+            color: black !important;
+            padding: 0;
+            margin: 0;
+        }
+
+        /* Kontejner za red (3 po redu) */
+        .print-row {
+            display: flex;
+            flex-wrap: nowrap; /* Osigurava da ostanu u jednom redu */
+            justify-content: space-between;
+            margin-bottom: 5mm;
+            page-break-inside: avoid; /* Sprečava prelamanje reda između stranica */
+        }
+        
+        /* Kontejner za pojedinačni proizvod/QR kod */
+        .print-item-cell {
+            width: 33.33%;
+            border: 1px solid #aaa;
+            padding: 3mm;
+            box-sizing: border-box;
+        }
+
+        /* Tekst proizvoda */
+        .print-text {
+            font-size: 8pt; /* Jako smanjen font da bi stao duži naziv */
+            line-height: 1.2;
+            height: 20mm; /* Fiksna visina za tekst + šifru */
+            overflow: hidden;
+            text-align: left;
+            margin-bottom: 2mm;
+        }
+
+        /* Kontejner za QR kod */
+        .print-qr-container {
+            width: 20mm; 
+            height: 20mm; 
+            margin: 0 auto; /* Centriranje QR koda */
+            border: 1px solid #ccc;
+        }
+        
+        /* Smanjenje hedera na štampanoj listi */
+        h1 {
+            font-size: 16pt;
+            margin-bottom: 10pt;
+            text-align: left;
+            margin-left: 5mm;
+        }
+        
+        /* Prilagodba QR kodova unutar kontejnera */
+        .print-qr-container canvas, .print-qr-container img {
+            width: 100% !important;
+            height: 100% !important;
+        }
+    }
+  </style>
+  <script>
+    function showList() {
+      const selection = document.getElementById('nameSelector').value;
+      const sections = document.querySelectorAll('.product-section');
+      sections.forEach(section => {
+        section.style.display = section.id === selection ? 'block' : 'none';
+      });
+      // Prikazuje ili skriva dugme za štampanje u zavisnosti od selekcije
+      document.getElementById('printListBtn').style.display = selection ? 'inline-block' : 'none';
+    }
+    
+    function generatePrintView() {
+        const activeSection = document.querySelector('.product-section:not([style*="display: none"])');
+        const printContent = document.getElementById('printContent');
+        
+        // 1. KLJUČNO: Potpuno čišćenje sadržaja
+        printContent.innerHTML = ''; 
+        
+        if (!activeSection) {
+            alert("Odaberi dobavljača prije štampanja!");
+            return;
+        }
+
+        const supplierName = activeSection.id;
+        const rows = activeSection.querySelectorAll("tbody tr");
+        
+        if (rows.length === 0) {
+            alert("Lista proizvoda je prazna!");
+            return;
+        }
+        
+        // 2. Priprema sadržaja za štampanje - Grupisanje 3 po redu
+        let htmlContent = `<h1>Lista Šifri: ${supplierName}</h1><div class="print-rows-container">`;
+        let currentRow = '';
+        let itemCounter = 0;
+        
+        const products = Array.from(rows).map(row => {
+            const cols = row.querySelectorAll("td");
+            return {
+                proizvod: cols[0].innerText.trim(),
+                sifra: cols[1].innerText.trim(),
+            };
+        });
+
+        products.forEach((product, index) => {
+            const { proizvod, sifra } = product;
+            
+            // Kreiranje UNIKATNOG ID-a
+            const qrDivId = `qr-${supplierName}-${sifra}-${index}`; 
+            
+            // Kreiranje ćelije za pojedinačni proizvod
+            const itemCell = `
+                <div class="print-item-cell">
+                    <div class="print-text">
+                        <strong>${proizvod}</strong> <br>
+                        Šifra: ${sifra}
+                    </div>
+                    <div id="${qrDivId}" class="print-qr-container"></div>
+                </div>
+            `;
+            
+            // Otvaranje novog reda (print-row) na početku ili nakon svakog 3. elementa
+            if (itemCounter % 3 === 0) {
+                if (itemCounter > 0) {
+                    currentRow += '</div>'; // Zatvaranje prethodnog reda
+                }
+                currentRow += '<div class="print-row">'; // Otvaranje novog reda
+            }
+            
+            currentRow += itemCell;
+            itemCounter++;
+        });
+
+        // Zatvaranje poslednjeg reda
+        currentRow += '</div>'; 
+        
+        htmlContent += currentRow + '</div>'; // Zatvaranje print-rows-container
+        
+        printContent.innerHTML = htmlContent;
+        
+        // 3. Generisanje QR kodova (u novim kontejnerima)
+        const originalBodyStyle = document.body.style.backgroundColor;
+        document.body.style.backgroundColor = 'white'; 
+        
+        products.forEach((product, index) => {
+            const { sifra } = product;
+            const qrDivId = `qr-${supplierName}-${sifra}-${index}`; 
+            
+            const qrDiv = document.getElementById(qrDivId);
+            if (qrDiv) {
+                 new QRCode(qrDiv, {
+                    text: sifra,
+                    width: 70, // Prilagođeno za 3 po redu
+                    height: 70, // Prilagođeno za 3 po redu
+                    colorDark : "#000000",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.H
+                });
+            }
+        });
+        
+        document.body.style.backgroundColor = originalBodyStyle;
+
+        // 4. Pokretanje dijaloga za štampanje
+        window.print();
+    }
+    
+  </script>
+</head>
+<body>
+
+  <label for="nameSelector">Dobavljač</label>
+  <br>
+  <select id="nameSelector" onchange="showList()">
+    <option value="" selected="selected">-- Odaberite --</option>
+    <option value="MEPAS">MEPAS</option>
+    <option value="TULUMOVIĆ">TULUMOVIĆ</option>
+    <option value="MADI">MADI</option>
+    <option value="SARA">SARA</option>
+    <option value="LEDO">LEDO</option>
+    <option value="VENERA">VENERA</option>
+    <option value="EON">EON</option>
+    <option value="VIOLETA">VIOLETA</option>
+    <option value="AKOVA IMPEX">AKOVA IMPEX</option>
+    <option value="DŽAJIĆ COMMERCE">DŽAJIĆ COMMERCE</option>
+    <option value="AG FRIGO">AG FRIGO</option>
+    <option value="DUKAT">DUKAT</option>
+    <option value="MILANKOVIĆ">MILANKOVIĆ</option>
+    <option value="KUČ">KUČ</option>
+    <option value="PAĐENI">PAĐENI</option>
+    <option value="MEGGLE">MEGGLE</option>
+    <option value="MLIJEKOPRODUKT">MLIJEKOPRODUKT</option>
+    <option value="OMEGA">OMEGA</option>
+    <option value="TRIVAS">TRIVAS</option>
+    <option value="PPK">PPK</option>
+    <option value="LUKAS TP NAKIĆ">LUKAS TP NAKIĆ</option>
+    <option value="VIMES">VIMES</option>
+    <option value="MAKEA / TOPOLSKA">MAKEA / TOPOLSKA</option>
+    <option value="EUROCOMPANY">EUROCOMPANY</option>
+    <option value="MIK COMPANY">MIK COMPANY</option>
+    <option value="BAKALAR COMMERCE">BAKALAR COMMERCE</option>
+    <option value="MB IMPEX">MB IMPEX</option>
+    <option value="KLEKOVAČA">KLEKOVAČA</option>
+    <option value="KRAJINA KLAS">KRAJINA KLAS</option>
+    <option value="DON TRADE">DON TRADE</option>
+    <option value="YIMOR">YIMOR</option>
+    <option value="NTB TRADE">NTB TRADE</option>
+  </select>
+
+  <div id="dynamicSections"></div>
+
+
+
+
+  <div class="button-group">
+    <button id="editToggle">
+      Izmijeni
+    </button>
+    <button id="printListBtn" onclick="generatePrintView()">
+        Štampaj listu
+    </button>
+  </div>
+
+  <div id="editForm" style="display:none; margin-top:2rem;">
+    <h3 style="color:#fdff55;">Uredi / Dodaj proizvod</h3>
+    <input id="proizvodInput" placeholder="Proizvod" style="font-size:1.4rem; padding:0.5rem; width:40%; margin-right:8px;">
+    <input id="sifraInput" placeholder="Šifra" style="font-size:1.4rem; padding:0.5rem; width:25%; margin-right:8px;">
+    <button id="saveBtn" style="font-size:1.2rem; padding:0.5rem 1rem;">Spremi</button>
+  </div>
+  
+  <div id="printContent">
+      </div>
+
+  <script>
+    // Svi scriptovi za funkcionalnosti
+    window.addEventListener('load', () => {
+      const editBtn = document.getElementById('editToggle');
+      const form = document.getElementById('editForm');
+      const saveBtn = document.getElementById('saveBtn');
+      let editRow = null;
+      let editMode = false;
+
+      // Load data from localStorage into tables (if present)
+      function ucitajPodatke() {
+        const data = JSON.parse(localStorage.getItem('proizvodi') || '{}');
+        Object.keys(data).forEach(naziv => {
+          const section = document.getElementById(naziv);
+          if (!section) return;
+          const tbody = section.querySelector('tbody');
+          
+          if (data[naziv].length > 0) {
+            tbody.innerHTML = ''; 
+            data[naziv].forEach(p => {
+              const tr = document.createElement('tr');
+              tr.innerHTML = `<td>${p.proizvod}</td><td>${p.sifra}</td>`;
+              tbody.appendChild(tr);
+            });
+          }
+        });
+        bindRowClicks();
+      }
+
+      function sacuvajPodatke() {
+        const data = {};
+        document.querySelectorAll('.product-section').forEach(section => {
+          const naziv = section.id;
+          const proizvodi = [];
+          section.querySelectorAll('tbody tr').forEach(tr => {
+            const td = tr.querySelectorAll('td');
+            if (td.length >= 2)
+              proizvodi.push({ proizvod: td[0].textContent.trim(), sifra: td[1].textContent.trim() });
+          });
+          data[naziv] = proizvodi;
+        });
+        localStorage.setItem('proizvodi', JSON.stringify(data));
+      }
+
+      function bindRowClicks() {
+        document.querySelectorAll('table tbody tr').forEach(row => {
+          row.replaceWith(row.cloneNode(true));
+        });
+        document.querySelectorAll('table tbody tr').forEach(row => {
+          row.addEventListener('click', () => {
+            if (!editMode) return;
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 2) {
+              document.getElementById('proizvodInput').value = cells[0].textContent.trim();
+              document.getElementById('sifraInput').value = cells[1].textContent.trim();
+              editRow = row;
+            }
+          });
+        });
+      }
+
+      function prikaziXkolone(prikazi) {
+        document.querySelectorAll('table').forEach(table => {
+          const header = table.querySelector('thead tr');
+          const tbody = table.querySelector('tbody');
+          if (prikazi) {
+            if (!header.querySelector('.x-header')) {
+              const th = document.createElement('th');
+              th.textContent = ' ';
+              th.classList.add('x-header');
+              header.appendChild(th);
+            }
+            tbody.querySelectorAll('tr').forEach(row => dodajXdugme(row));
+          } else {
+            const xHeader = header.querySelector('.x-header');
+            if (xHeader) xHeader.remove();
+            tbody.querySelectorAll('.x-cell').forEach(cell => cell.remove());
+          }
+        });
+      }
+
+      function dodajXdugme(row) {
+        if (row.querySelector('.x-cell')) return;
+        const cell = document.createElement('td');
+        cell.innerHTML = '<span style="color:#fdff55; font-size:1.6rem; cursor:pointer;">(X)</span>';
+        cell.classList.add('x-cell');
+        cell.style.textAlign = 'center';
+        cell.addEventListener('click', e => {
+          e.stopPropagation();
+          if (confirm('Obrisati ovaj proizvod?')) {
+            row.remove();
+            sacuvajPodatke();
+          }
+        });
+        row.appendChild(cell);
+      }
+
+      editBtn.addEventListener('click', () => {
+        editMode = !editMode;
+        form.style.display = editMode ? 'block' : 'none';
+        prikaziXkolone(editMode);
+      });
+
+      saveBtn.addEventListener('click', () => {
+        const proizvod = document.getElementById('proizvodInput').value.trim();
+        const sifra = document.getElementById('sifraInput').value.trim();
+        if (!proizvod || !sifra) return alert('Unesi naziv i šifru proizvoda!');
+        const activeSection = document.querySelector('.product-section:not([style*="display: none"])');
+        if (!activeSection) return alert('Odaberi dobavljača prije izmjene.');
+        const tbody = activeSection.querySelector('tbody');
+
+        if (editRow) {
+          const cells = editRow.querySelectorAll('td');
+          if (cells.length >= 2) {
+            cells[0].textContent = proizvod;
+            cells[1].textContent = sifra;
+          }
+          editRow = null;
+        } else {
+          const newRow = document.createElement('tr');
+          newRow.innerHTML = `<td>${proizvod}</td><td>${sifra}</td>`;
+          
+          newRow.addEventListener('click', () => {
+            if (!editMode) return;
+            document.getElementById('proizvodInput').value = proizvod;
+            document.getElementById('sifraInput').value = sifra;
+            editRow = newRow;
+          });
+          tbody.appendChild(newRow);
+          if (editMode) dodajXdugme(newRow);
+        }
+        sacuvajPodatke();
+        document.getElementById('proizvodInput').value = '';
+        document.getElementById('sifraInput').value = '';
+      });
+
+      ucitajPodatke();
+
+      document.getElementById('nameSelector').addEventListener('change', () => {
+        setTimeout(() => bindRowClicks(), 50);
+      });
+      
+    });
+  </script>
+
+
+  <div id="NTB TRADE" class="product-section">
+    <table>
+      <thead><tr><th>Proizvod</th><th>Šifra</th></tr></thead>
+      <tbody>
+        <tr><td>Banana</td><td>00156</td></tr>
+        <tr><td>Celer</td><td>00163</td></tr>
+        <tr><td>Đumbir</td><td>00550</td></tr>
+        <tr><td>Grejpfrut crveni</td><td>00135</td></tr>
+        <tr><td>Grožđe bijelo</td><td>00141</td></tr>
+        <tr><td>Grožđe crno</td><td>00142</td></tr>
+        <tr><td>Jabuka zlatni delišes</td><td>00126</td></tr>
+        <tr><td>Japanska jabuka</td><td>00678</td></tr>
+        <tr><td>Kivi</td><td>00732</td></tr>
+        <tr><td>Klementina</td><td>00154</td></tr>
+        <tr><td>Krompir batato</td><td>00460</td></tr>
+        <tr><td>Limun turski</td><td>00133</td></tr>
+        <tr><td>Mandarina</td><td>00132</td></tr>
+        <tr><td>Mrkva</td><td>00110</td></tr>
+        <tr><td>Nar</td><td>00136</td></tr>
+        <tr><td>Narandža turska</td><td>00157</td></tr>
+        <tr><td>Peršun list-korijen</td><td>00548</td></tr>
+        <tr><td>Prasa pakovana</td><td>281348</td></tr>
+        <tr><td>Salata zelena kristal</td><td>00433</td></tr>
+        <tr><td>Tikvica</td><td>00118</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+
+
+  <script>
+    // ================================
+    // Ucitavanje iz Google Sheets
+    // ================================
+    const SHEET_URL = "https://docs.google.com/spreadsheets/d/11ulT0Q4W7w-LUSfo8gqpxOJE_ez9YhW7X6lGrEmKhuM/gviz/tq?tqx=out:json";
+    const SHEET_EDIT_LINK = "https://docs.google.com/spreadsheets/d/11ulT0Q4W7w-LUSfo8gqpxOJE_ez9YhW7X6lGrEmKhuM/edit?usp=sharing";
+    const SUPPLIER_ORDER = ["MEPAS", "TULUMOVIĆ", "MADI", "SARA", "LEDO", "VENERA", "EON", "VIOLETA", "AKOVA IMPEX", "DŽAJIĆ COMMERCE", "AG FRIGO", "DUKAT", "MILANKOVIĆ", "KUČ", "PAĐENI", "MEGGLE", "MLIJEKOPRODUKT", "OMEGA", "TRIVAS", "PPK", "LUKAS TP NAKIĆ", "VIMES", "MAKEA / TOPOLSKA", "EUROCOMPANY", "MIK COMPANY", "BAKALAR COMMERCE", "MB IMPEX", "KLEKOVAČA", "KRAJINA KLAS", "DON TRADE", "YIMOR", "NTB TRADE"];
+
+    async function loadFromSheet() {
+      const container = document.getElementById('dynamicSections');
+      container.innerHTML = '';
+
+      const res = await fetch(SHEET_URL, { cache: "no-store" });
+      const text = await res.text();
+
+      // Google gviz JSONP format: "/*O_o*/
+google.visualization.Query.setResponse(<json>);"
+      const json = JSON.parse(text.substring(47).slice(0, -2));
+      const rows = (json.table && json.table.rows) ? json.table.rows : [];
+
+      // Build dataset: supplier -> list of {proizvod, sifra}
+      const data = {};
+
+      rows.forEach(r => {
+        const c = r.c || [];
+        const dob = c[0] && c[0].v != null ? String(c[0].v).trim() : '';
+        const proizvod = c[1] && c[1].v != null ? String(c[1].v).trim() : '';
+        const sifra = c[2] && c[2].v != null ? String(c[2].v).trim() : '';
+
+        if (!dob || !proizvod || !sifra) return;
+
+        // Skip header rows if someone duplicated header
+        if (dob.toLowerCase() === 'dobavljač' || proizvod.toLowerCase() === 'proizvod' || sifra.toLowerCase() === 'šifra') return;
+
+        if (!data[dob]) data[dob] = [];
+        data[dob].push({ proizvod, sifra });
+      });
+
+      // Populate dropdown in the same order as in the original menu
+      const select = document.getElementById('nameSelector');
+      // Keep the first placeholder option only
+      select.querySelectorAll('option').forEach((opt, idx) => { if (idx !== 0) opt.remove(); });
+
+      // Determine final supplier list: ordered known suppliers that exist in data, then any extras
+      const present = new Set(Object.keys(data));
+      const finalSuppliers = [];
+
+      SUPPLIER_ORDER.forEach(name => {
+        if (present.has(name)) finalSuppliers.push(name);
+      });
+
+      Object.keys(data).forEach(name => {
+        if (!finalSuppliers.includes(name)) finalSuppliers.push(name);
+      });
+
+      finalSuppliers.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+
+        const div = document.createElement('div');
+        div.id = name;
+        div.className = 'product-section';
+
+        let html = `
+          <table>
+            <thead><tr><th>Proizvod</th><th>Šifra</th></tr></thead>
+            <tbody>
+        `;
+
+        data[name].forEach(p => {
+          html += `<tr><td>${escapeHtml(p.proizvod)}</td><td>${escapeHtml(p.sifra)}</td></tr>`;
+        });
+
+        html += `
+            </tbody>
+          </table>
+        `;
+
+        div.innerHTML = html;
+        container.appendChild(div);
+      });
+
+      // Default opcija B: nista ne prikazuj dok se ne odabere
+      showList();
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    // Preusmjeri "Izmijeni" dugme na Google Sheets (jer se sad sve uredjuje tamo)
+    window.addEventListener('load', () => {
+      const editBtn = document.getElementById('editToggle');
+      const form = document.getElementById('editForm');
+
+      if (form) form.style.display = 'none';
+
+      if (editBtn) {
+        editBtn.textContent = 'Uredi u Google Sheets';
+        editBtn.addEventListener('click', () => {
+          window.open(SHEET_EDIT_LINK, '_blank');
+        });
+      }
+
+      // Osvjezi podatke pri ucitavanju
+      loadFromSheet().catch(err => {
+        console.error(err);
+        alert('Greška pri učitavanju iz Google Sheets. Provjeri da je Sheet "Anyone with the link" i da ima kolone: Dobavljač, Proizvod, Šifra.');
+      });
+
+      // Dodatno: kratki refresh nakon promjene dobavljaca (QR/klikovi nisu potrebni)
+      document.getElementById('nameSelector').addEventListener('change', () => {
+        // showList vec postoji u originalu i upravlja prikazom + print dugmetom
+      });
+    });
+  </script>
+</body>
+</html>
