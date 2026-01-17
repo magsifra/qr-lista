@@ -163,7 +163,7 @@ const SCRIPT_URL =
 
 let data=[];
 let editMode=false;
-let editingCode=null;
+let editingRowId = null;
 
 /* LOAD */
 async function loadData(){
@@ -221,17 +221,22 @@ cancelEdit();
 
 function startEdit(row){
   if(!editMode) return;
-  productInput.value=row.proizvod;
-  codeInput.value=row.sifra;
-  editingCode=row.sifra;
+  productInput.value = row.proizvod;
+  codeInput.value    = row.sifra;
+
+  // ✅ pamti tačno koji red mijenjaš u Sheetu
+  editingRowId = row.rowId;
+
   renderTable();
 }
 
+
 function cancelEdit(){
-  editingCode=null;
-  productInput.value="";
-  codeInput.value="";
+  editingRowId = null;
+  productInput.value = "";
+  codeInput.value = "";
 }
+
 
 /* SAVE */
 saveBtn.onclick=async()=>{
@@ -243,12 +248,13 @@ saveBtn.onclick=async()=>{
     method:"POST",
     mode:"no-cors",
     body:new URLSearchParams({
-      action:"upsert",
-      dobavljac:supplierSelect.value,
-      proizvod:productInput.value,
-      sifra:codeInput.value,
-      oldSifra:editingCode||""
-    })
+  action: "upsert",
+  rowId: editingRowId || "",
+  dobavljac: supplierSelect.value,
+  proizvod: productInput.value.trim(),
+  sifra: codeInput.value.trim()
+})
+
   });
 
   cancelEdit();
