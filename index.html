@@ -95,12 +95,32 @@ button{cursor:pointer}
 }
 
 @page{ size:A4; margin:8mm; }
+
+/* ✅ FIX: nema više prazne prve stranice */
 @media print{
-  body *{visibility:hidden}
-  #qrModal,#qrModal *{visibility:visible}
-  #qrModal{position:static !important; background:#fff !important; display:block !important; align-items:unset !important; justify-content:unset !important;}
-  #qrBox{border:none; width:100%; max-height:none; overflow:visible; padding:0; margin:0}
-  #qrControls{display:none}
+  /* ✅ U printu prikaži SAMO modal sa sadržajem za štampu */
+  body > *:not(#qrModal){ display:none !important; }
+
+  /* Modal postaje normalan dokument u printu */
+  #qrModal{
+    display:block !important;
+    position:static !important;
+    inset:auto !important;
+    background:#fff !important;
+    align-items:unset !important;
+    justify-content:unset !important;
+  }
+
+  #qrBox{
+    border:none !important;
+    width:100% !important;
+    max-height:none !important;
+    overflow:visible !important;
+    padding:0 !important;
+    margin:0 !important;
+  }
+
+  #qrControls{display:none !important;}
 }
 </style>
 </head>
@@ -239,13 +259,11 @@ function startEdit(row){
   renderTable();
 }
 
-
 function cancelEdit(){
   editingRowId = null;
   productInputEl.value = "";
   codeInputEl.value = "";
 }
-
 
 /* SAVE */
 saveBtnEl.onclick=async()=>{
@@ -323,7 +341,6 @@ function printAll(){
   printContentEl.appendChild(table);
   qrModalEl.style.display = "flex";
 }
-
 
 function closePrint(){qrModalEl.style.display="none";}
 
